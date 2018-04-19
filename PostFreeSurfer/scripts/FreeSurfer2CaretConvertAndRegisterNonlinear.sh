@@ -225,67 +225,78 @@ for Hemisphere in L R ; do
 		else
 			Secondary=""
 		fi
-		mris_convert "$FreeSurferFolder"/surf/"$hemisphere"h."$Surface" "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii
-		${CARET7DIR}/wb_command -set-structure "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii ${Structure} -surface-type $Type$Secondary
-		${CARET7DIR}/wb_command -surface-apply-affine "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii "$FreeSurferFolder"/mri/c_ras.mat "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii
-		${CARET7DIR}/wb_command -add-to-spec-file "$T1wFolder"/"$NativeFolder"/"$Subject".native.wb.spec $Structure "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii
-		${CARET7DIR}/wb_command -surface-apply-warpfield "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii "$InverseAtlasTransform".nii.gz "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii -fnirt "$AtlasTransform".nii.gz
-		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject".native.wb.spec $Structure "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii
+
+		# Set up some variables for very common strings
+		AtlasNativeSubj="$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"
+		AtlasNativeSubjHemi="$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"
+		AtlasSubjHemi="$AtlasSpaceFolder"/"$Subject"."$Hemisphere"
+		T1wNativeSubjHemi="$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"
+		
+		mris_convert "$FreeSurferFolder"/surf/"$hemisphere"h."$Surface" ${T1wNativeSubjHemi}."$Surface".native.surf.gii
+		${CARET7DIR}/wb_command -set-structure ${T1wNativeSubjHemi}."$Surface".native.surf.gii ${Structure} -surface-type $Type$Secondary
+		${CARET7DIR}/wb_command -surface-apply-affine ${T1wNativeSubjHemi}."$Surface".native.surf.gii "$FreeSurferFolder"/mri/c_ras.mat ${T1wNativeSubjHemi}."$Surface".native.surf.gii
+		${CARET7DIR}/wb_command -add-to-spec-file "$T1wFolder"/"$NativeFolder"/"$Subject".native.wb.spec $Structure ${T1wNativeSubjHemi}."$Surface".native.surf.gii
+		${CARET7DIR}/wb_command -surface-apply-warpfield ${T1wNativeSubjHemi}."$Surface".native.surf.gii "$InverseAtlasTransform".nii.gz ${AtlasNativeSubjHemi}."$Surface".native.surf.gii -fnirt "$AtlasTransform".nii.gz
+		${CARET7DIR}/wb_command -add-to-spec-file ${AtlasNativeSubj}.native.wb.spec $Structure ${AtlasNativeSubjHemi}."$Surface".native.surf.gii
 		i=$(( i+1 ))
 	done
 
 	#Create midthickness by averaging white and pial surfaces and use it to make inflated surfacess
 	for Folder in "$T1wFolder" "$AtlasSpaceFolder" ; do
-		${CARET7DIR}/wb_command -surface-average "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii -surf "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".white.native.surf.gii -surf "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".pial.native.surf.gii
-		${CARET7DIR}/wb_command -set-structure "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii ${Structure} -surface-type ANATOMICAL -surface-secondary-type MIDTHICKNESS
-		${CARET7DIR}/wb_command -add-to-spec-file "$Folder"/"$NativeFolder"/"$Subject".native.wb.spec $Structure "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii
+
+		FolderNativeSubj="$Folder"/"$NativeFolder"/"$Subject"
+		FolderNativeSubjHemi="$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere"
+		
+		${CARET7DIR}/wb_command -surface-average ${FolderNativeSubjHemi}.midthickness.native.surf.gii -surf ${FolderNativeSubjHemi}.white.native.surf.gii -surf ${FolderNativeSubjHemi}.pial.native.surf.gii
+		${CARET7DIR}/wb_command -set-structure ${FolderNativeSubjHemi}.midthickness.native.surf.gii ${Structure} -surface-type ANATOMICAL -surface-secondary-type MIDTHICKNESS
+		${CARET7DIR}/wb_command -add-to-spec-file ${FolderNativeSubj}.native.wb.spec $Structure ${FolderNativeSubjHemi}.midthickness.native.surf.gii
 
 		#get number of vertices from native file
-		NativeVerts=$(${CARET7DIR}/wb_command -file-information "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii | grep 'Number of Vertices:' | cut -f2 -d: | tr -d '[:space:]')
+		NativeVerts=$(${CARET7DIR}/wb_command -file-information ${FolderNativeSubjHemi}.midthickness.native.surf.gii | grep 'Number of Vertices:' | cut -f2 -d: | tr -d '[:space:]')
 
 		#HCP fsaverage_LR32k used -iterations-scale 0.75. Compute new param value for native mesh density
 		NativeInflationScale=$(echo "scale=4; $InflateExtraScale * 0.75 * $NativeVerts / 32492" | bc -l)
 
-		${CARET7DIR}/wb_command -surface-generate-inflated "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".inflated.native.surf.gii "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".very_inflated.native.surf.gii -iterations-scale $NativeInflationScale
-		${CARET7DIR}/wb_command -add-to-spec-file "$Folder"/"$NativeFolder"/"$Subject".native.wb.spec $Structure "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".inflated.native.surf.gii
-		${CARET7DIR}/wb_command -add-to-spec-file "$Folder"/"$NativeFolder"/"$Subject".native.wb.spec $Structure "$Folder"/"$NativeFolder"/"$Subject"."$Hemisphere".very_inflated.native.surf.gii
+		${CARET7DIR}/wb_command -surface-generate-inflated ${FolderNativeSubjHemi}.midthickness.native.surf.gii ${FolderNativeSubjHemi}.inflated.native.surf.gii ${FolderNativeSubjHemi}.very_inflated.native.surf.gii -iterations-scale $NativeInflationScale
+		${CARET7DIR}/wb_command -add-to-spec-file ${FolderNativeSubj}.native.wb.spec $Structure ${FolderNativeSubjHemi}.inflated.native.surf.gii
+		${CARET7DIR}/wb_command -add-to-spec-file ${FolderNativeSubj}.native.wb.spec $Structure ${FolderNativeSubjHemi}.very_inflated.native.surf.gii
 	done
 
 	#Convert original and registered spherical surfaces and add them to the nonlinear spec file
 	for Surface in sphere.reg sphere ; do
-		mris_convert "$FreeSurferFolder"/surf/"$hemisphere"h."$Surface" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii
-		${CARET7DIR}/wb_command -set-structure "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii ${Structure} -surface-type SPHERICAL
+		mris_convert "$FreeSurferFolder"/surf/"$hemisphere"h."$Surface" ${AtlasNativeSubjHemi}."$Surface".native.surf.gii
+		${CARET7DIR}/wb_command -set-structure ${AtlasNativeSubjHemi}."$Surface".native.surf.gii ${Structure} -surface-type SPHERICAL
 	done
-	${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject".native.wb.spec $Structure "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.surf.gii
+	${CARET7DIR}/wb_command -add-to-spec-file ${AtlasNativeSubj}.native.wb.spec $Structure ${AtlasNativeSubjHemi}.sphere.native.surf.gii
 
 	#Add more files to the spec file and convert other FreeSurfer surface data to metric/GIFTI including sulc, curv, and thickness.
 	for Map in sulc@sulc@Sulc thickness@thickness@Thickness curv@curvature@Curvature ; do
 		fsname=$(echo $Map | cut -d "@" -f 1)
 		wbname=$(echo $Map | cut -d "@" -f 2)
 		mapname=$(echo $Map | cut -d "@" -f 3)
-		mris_convert -c "$FreeSurferFolder"/surf/"$hemisphere"h."$fsname" "$FreeSurferFolder"/surf/"$hemisphere"h.white "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$wbname".native.shape.gii
-		${CARET7DIR}/wb_command -set-structure "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$wbname".native.shape.gii ${Structure}
-		${CARET7DIR}/wb_command -metric-math "var * -1" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$wbname".native.shape.gii -var var "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$wbname".native.shape.gii
-		${CARET7DIR}/wb_command -set-map-names "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$wbname".native.shape.gii -map 1 "$Subject"_"$Hemisphere"_"$mapname"
-		${CARET7DIR}/wb_command -metric-palette "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$wbname".native.shape.gii MODE_AUTO_SCALE_PERCENTAGE -pos-percent 2 98 -palette-name Gray_Interp -disp-pos true -disp-neg true -disp-zero true
+		mris_convert -c "$FreeSurferFolder"/surf/"$hemisphere"h."$fsname" "$FreeSurferFolder"/surf/"$hemisphere"h.white ${AtlasNativeSubjHemi}."$wbname".native.shape.gii
+		${CARET7DIR}/wb_command -set-structure ${AtlasNativeSubjHemi}."$wbname".native.shape.gii ${Structure}
+		${CARET7DIR}/wb_command -metric-math "var * -1" ${AtlasNativeSubjHemi}."$wbname".native.shape.gii -var var ${AtlasNativeSubjHemi}."$wbname".native.shape.gii
+		${CARET7DIR}/wb_command -set-map-names ${AtlasNativeSubjHemi}."$wbname".native.shape.gii -map 1 "$Subject"_"$Hemisphere"_"$mapname"
+		${CARET7DIR}/wb_command -metric-palette ${AtlasNativeSubjHemi}."$wbname".native.shape.gii MODE_AUTO_SCALE_PERCENTAGE -pos-percent 2 98 -palette-name Gray_Interp -disp-pos true -disp-neg true -disp-zero true
 	done
 	#Thickness specific operations
-	${CARET7DIR}/wb_command -metric-math "abs(thickness)" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii -var thickness "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii
-	${CARET7DIR}/wb_command -metric-palette "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii MODE_AUTO_SCALE_PERCENTAGE -pos-percent 4 96 -interpolate true -palette-name videen_style -disp-pos true -disp-neg false -disp-zero false
-	${CARET7DIR}/wb_command -metric-math "thickness > 0" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii -var thickness "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii
-	${CARET7DIR}/wb_command -metric-fill-holes "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii
-	${CARET7DIR}/wb_command -metric-remove-islands "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii
-	${CARET7DIR}/wb_command -set-map-names "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii -map 1 "$Subject"_"$Hemisphere"_ROI
-	${CARET7DIR}/wb_command -metric-dilate "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii 10 "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii -nearest
-	${CARET7DIR}/wb_command -metric-dilate "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".curvature.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii 10 "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".curvature.native.shape.gii -nearest
+	${CARET7DIR}/wb_command -metric-math "abs(thickness)" ${AtlasNativeSubjHemi}.thickness.native.shape.gii -var thickness ${AtlasNativeSubjHemi}.thickness.native.shape.gii
+	${CARET7DIR}/wb_command -metric-palette ${AtlasNativeSubjHemi}.thickness.native.shape.gii MODE_AUTO_SCALE_PERCENTAGE -pos-percent 4 96 -interpolate true -palette-name videen_style -disp-pos true -disp-neg false -disp-zero false
+	${CARET7DIR}/wb_command -metric-math "thickness > 0" ${AtlasNativeSubjHemi}.roi.native.shape.gii -var thickness ${AtlasNativeSubjHemi}.thickness.native.shape.gii
+	${CARET7DIR}/wb_command -metric-fill-holes ${AtlasNativeSubjHemi}.midthickness.native.surf.gii ${AtlasNativeSubjHemi}.roi.native.shape.gii ${AtlasNativeSubjHemi}.roi.native.shape.gii
+	${CARET7DIR}/wb_command -metric-remove-islands ${AtlasNativeSubjHemi}.midthickness.native.surf.gii ${AtlasNativeSubjHemi}.roi.native.shape.gii ${AtlasNativeSubjHemi}.roi.native.shape.gii
+	${CARET7DIR}/wb_command -set-map-names ${AtlasNativeSubjHemi}.roi.native.shape.gii -map 1 ${Subject}_${Hemisphere}_ROI
+	${CARET7DIR}/wb_command -metric-dilate ${AtlasNativeSubjHemi}.thickness.native.shape.gii ${AtlasNativeSubjHemi}.midthickness.native.surf.gii 10 ${AtlasNativeSubjHemi}.thickness.native.shape.gii -nearest
+	${CARET7DIR}/wb_command -metric-dilate ${AtlasNativeSubjHemi}.curvature.native.shape.gii ${AtlasNativeSubjHemi}.midthickness.native.surf.gii 10 ${AtlasNativeSubjHemi}.curvature.native.shape.gii -nearest
 
 	#Label operations
 	for Map in aparc aparc.a2009s ; do #Remove BA because it doesn't convert properly
 		if [ -e "$FreeSurferFolder"/label/"$hemisphere"h."$Map".annot ] ; then
-			mris_convert --annot "$FreeSurferFolder"/label/"$hemisphere"h."$Map".annot "$FreeSurferFolder"/surf/"$hemisphere"h.white "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.label.gii
-			${CARET7DIR}/wb_command -set-structure "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.label.gii $Structure
-			${CARET7DIR}/wb_command -set-map-names "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.label.gii -map 1 "$Subject"_"$Hemisphere"_"$Map"
-			${CARET7DIR}/wb_command -gifti-label-add-prefix "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.label.gii "${Hemisphere}_" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.label.gii
+			mris_convert --annot "$FreeSurferFolder"/label/"$hemisphere"h."$Map".annot "$FreeSurferFolder"/surf/"$hemisphere"h.white ${AtlasNativeSubjHemi}."$Map".native.label.gii
+			${CARET7DIR}/wb_command -set-structure ${AtlasNativeSubjHemi}."$Map".native.label.gii $Structure
+			${CARET7DIR}/wb_command -set-map-names ${AtlasNativeSubjHemi}."$Map".native.label.gii -map 1 "$Subject"_"$Hemisphere"_"$Map"
+			${CARET7DIR}/wb_command -gifti-label-add-prefix ${AtlasNativeSubjHemi}."$Map".native.label.gii "${Hemisphere}_" ${AtlasNativeSubjHemi}."$Map".native.label.gii
 		fi
 	done
 	### ------ END section on Native Mesh Processing ------
@@ -294,38 +305,38 @@ for Hemisphere in L R ; do
 	#Copy Atlas Files
 	cp "$SurfaceAtlasDIR"/fs_"$Hemisphere"/fsaverage."$Hemisphere".sphere."$HighResMesh"k_fs_"$Hemisphere".surf.gii "$AtlasSpaceFolder"/fsaverage/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_"$Hemisphere".surf.gii
 	cp "$SurfaceAtlasDIR"/fs_"$Hemisphere"/fs_"$Hemisphere"-to-fs_LR_fsaverage."$Hemisphere"_LR.spherical_std."$HighResMesh"k_fs_"$Hemisphere".surf.gii "$AtlasSpaceFolder"/fsaverage/"$Subject"."$Hemisphere".def_sphere."$HighResMesh"k_fs_"$Hemisphere".surf.gii
-	cp "$SurfaceAtlasDIR"/fsaverage."$Hemisphere"_LR.spherical_std."$HighResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii
-	${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii
-	cp "$SurfaceAtlasDIR"/"$Hemisphere".atlasroi."$HighResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".atlasroi."$HighResMesh"k_fs_LR.shape.gii
+	cp "$SurfaceAtlasDIR"/fsaverage."$Hemisphere"_LR.spherical_std."$HighResMesh"k_fs_LR.surf.gii ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii
+	${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii
+	cp "$SurfaceAtlasDIR"/"$Hemisphere".atlasroi."$HighResMesh"k_fs_LR.shape.gii ${AtlasSubjHemi}.atlasroi."$HighResMesh"k_fs_LR.shape.gii
 	cp "$SurfaceAtlasDIR"/"$Hemisphere".refsulc."$HighResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/${Subject}.${Hemisphere}.refsulc."$HighResMesh"k_fs_LR.shape.gii
 	if [ -e "$SurfaceAtlasDIR"/colin.cerebral."$Hemisphere".flat."$HighResMesh"k_fs_LR.surf.gii ] ; then
-		cp "$SurfaceAtlasDIR"/colin.cerebral."$Hemisphere".flat."$HighResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".flat."$HighResMesh"k_fs_LR.surf.gii
-		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".flat."$HighResMesh"k_fs_LR.surf.gii
+		cp "$SurfaceAtlasDIR"/colin.cerebral."$Hemisphere".flat."$HighResMesh"k_fs_LR.surf.gii ${AtlasSubjHemi}.flat."$HighResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure ${AtlasSubjHemi}.flat."$HighResMesh"k_fs_LR.surf.gii
 	fi
 
 	#Concatenate FS registration to FS --> FS_LR registration
-	sphereIn="$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.native.surf.gii
+	sphereIn=${AtlasNativeSubjHemi}.sphere.reg.native.surf.gii
 	sphereProjectTo="$AtlasSpaceFolder"/fsaverage/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_"$Hemisphere".surf.gii
 	sphereUnprojectFrom="$AtlasSpaceFolder"/fsaverage/"$Subject"."$Hemisphere".def_sphere."$HighResMesh"k_fs_"$Hemisphere".surf.gii
-	sphereOut="$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.reg_LR.native.surf.gii
+	sphereOut=${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.surf.gii
 	${CARET7DIR}/wb_command -surface-sphere-project-unproject $sphereIn $sphereProjectTo $sphereUnprojectFrom $sphereOut
 
 	#Make FreeSurfer Registration Areal Distortion Maps
-	${CARET7DIR}/wb_command -surface-vertex-areas "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.shape.gii
-	${CARET7DIR}/wb_command -surface-vertex-areas "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.reg_LR.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.reg_LR.native.shape.gii
-	${CARET7DIR}/wb_command -metric-math "ln(spherereg / sphere) / ln(2)" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".ArealDistortion_FS.native.shape.gii -var sphere "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.shape.gii -var spherereg "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.reg_LR.native.shape.gii
-	rm "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.reg_LR.native.shape.gii
-	${CARET7DIR}/wb_command -set-map-names "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".ArealDistortion_FS.native.shape.gii -map 1 "$Subject"_"$Hemisphere"_Areal_Distortion_FS
-	${CARET7DIR}/wb_command -metric-palette "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".ArealDistortion_FS.native.shape.gii MODE_AUTO_SCALE -palette-name ROY-BIG-BL -thresholding THRESHOLD_TYPE_NORMAL THRESHOLD_TEST_SHOW_OUTSIDE -1 1
+	${CARET7DIR}/wb_command -surface-vertex-areas ${AtlasNativeSubjHemi}.sphere.native.surf.gii ${AtlasNativeSubjHemi}.sphere.native.shape.gii
+	${CARET7DIR}/wb_command -surface-vertex-areas ${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.surf.gii ${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.shape.gii
+	${CARET7DIR}/wb_command -metric-math "ln(spherereg / sphere) / ln(2)" ${AtlasNativeSubjHemi}.ArealDistortion_FS.native.shape.gii -var sphere ${AtlasNativeSubjHemi}.sphere.native.shape.gii -var spherereg ${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.shape.gii
+	rm ${AtlasNativeSubjHemi}.sphere.native.shape.gii ${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.shape.gii
+	${CARET7DIR}/wb_command -set-map-names ${AtlasNativeSubjHemi}.ArealDistortion_FS.native.shape.gii -map 1 ${Subject}_${Hemisphere}_Areal_Distortion_FS
+	${CARET7DIR}/wb_command -metric-palette ${AtlasNativeSubjHemi}.ArealDistortion_FS.native.shape.gii MODE_AUTO_SCALE -palette-name ROY-BIG-BL -thresholding THRESHOLD_TYPE_NORMAL THRESHOLD_TEST_SHOW_OUTSIDE -1 1
 
-	${CARET7DIR}/wb_command -surface-distortion "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.reg_LR.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".EdgeDistortion_FS.native.shape.gii -edge-method
+	${CARET7DIR}/wb_command -surface-distortion ${AtlasNativeSubjHemi}.sphere.native.surf.gii ${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.surf.gii ${AtlasNativeSubjHemi}.EdgeDistortion_FS.native.shape.gii -edge-method
 
-	${CARET7DIR}/wb_command -surface-distortion "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.reg.reg_LR.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_FS.native.shape.gii -local-affine-method
-	${CARET7DIR}/wb_command -metric-merge "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainJ_FS.native.shape.gii -metric "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_FS.native.shape.gii -column 1
-	${CARET7DIR}/wb_command -metric-merge "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainR_FS.native.shape.gii -metric "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_FS.native.shape.gii -column 2
-	${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainJ_FS.native.shape.gii -var var "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainJ_FS.native.shape.gii
-	${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainR_FS.native.shape.gii -var var "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainR_FS.native.shape.gii
-	rm "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_FS.native.shape.gii
+	${CARET7DIR}/wb_command -surface-distortion ${AtlasNativeSubjHemi}.sphere.native.surf.gii ${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.surf.gii ${AtlasNativeSubjHemi}.Strain_FS.native.shape.gii -local-affine-method
+	${CARET7DIR}/wb_command -metric-merge ${AtlasNativeSubjHemi}.StrainJ_FS.native.shape.gii -metric ${AtlasNativeSubjHemi}.Strain_FS.native.shape.gii -column 1
+	${CARET7DIR}/wb_command -metric-merge ${AtlasNativeSubjHemi}.StrainR_FS.native.shape.gii -metric ${AtlasNativeSubjHemi}.Strain_FS.native.shape.gii -column 2
+	${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" ${AtlasNativeSubjHemi}.StrainJ_FS.native.shape.gii -var var ${AtlasNativeSubjHemi}.StrainJ_FS.native.shape.gii
+	${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" ${AtlasNativeSubjHemi}.StrainR_FS.native.shape.gii -var var ${AtlasNativeSubjHemi}.StrainR_FS.native.shape.gii
+	rm ${AtlasNativeSubjHemi}.Strain_FS.native.shape.gii
 
 	#If desired, run MSMSulc folding-based registration to FS_LR initialized with FS affine
 	if [ ${RegName} = "MSMSulc" ] ; then
@@ -333,146 +344,153 @@ for Hemisphere in L R ; do
 		if [ ! -e "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc ] ; then
 			mkdir "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc
 		fi
-		${CARET7DIR}/wb_command -surface-affine-regression "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.reg.reg_LR.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.mat
-		${CARET7DIR}/wb_command -surface-apply-affine "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.mat "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere_rot.surf.gii
+		${CARET7DIR}/wb_command -surface-affine-regression ${AtlasNativeSubjHemi}.sphere.native.surf.gii ${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.mat
+		${CARET7DIR}/wb_command -surface-apply-affine ${AtlasNativeSubjHemi}.sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.mat "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere_rot.surf.gii
 		${CARET7DIR}/wb_command -surface-modify-sphere "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere_rot.surf.gii 100 "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere_rot.surf.gii
-		cp "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere_rot.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.rot.native.surf.gii
+		cp "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere_rot.surf.gii ${AtlasNativeSubjHemi}.sphere.rot.native.surf.gii
 		DIR=$(pwd)
 		cd "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc
 		#Register using FreeSurfer Sulc Folding Map Using MSM Algorithm Configured for Reduced Distortion
 		#${MSMBINDIR}/msm --version
-		#${MSMBINDIR}/msm --levels=4 --conf=${MSMCONFIGDIR}/allparameterssulcDRconf --inmesh="$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.rot.native.surf.gii --trans="$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.rot.native.surf.gii --refmesh="$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii --indata="$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sulc.native.shape.gii --refdata="$AtlasSpaceFolder"/${Subject}.${Hemisphere}.refsulc."$HighResMesh"k_fs_LR.shape.gii --out="$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}. --verbose
-		${MSMBINDIR}/msm --conf=${MSMCONFIGDIR}/MSMSulcStrainFinalconf --inmesh="$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.rot.native.surf.gii --refmesh="$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii --indata="$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sulc.native.shape.gii --refdata="$AtlasSpaceFolder"/${Subject}.${Hemisphere}.refsulc."$HighResMesh"k_fs_LR.shape.gii --out="$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}. --verbose
+		#${MSMBINDIR}/msm --levels=4 --conf=${MSMCONFIGDIR}/allparameterssulcDRconf --inmesh=${AtlasNativeSubjHemi}.sphere.rot.native.surf.gii --trans=${AtlasNativeSubjHemi}.sphere.rot.native.surf.gii --refmesh=${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii --indata=${AtlasNativeSubjHemi}.sulc.native.shape.gii --refdata=${AtlasSubjHemi}.refsulc."$HighResMesh"k_fs_LR.shape.gii --out="$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}. --verbose
+		${MSMBINDIR}/msm --conf=${MSMCONFIGDIR}/MSMSulcStrainFinalconf --inmesh=${AtlasNativeSubjHemi}.sphere.rot.native.surf.gii --refmesh=${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii --indata=${AtlasNativeSubjHemi}.sulc.native.shape.gii --refdata="$AtlasSpaceFolder"/${Subject}.${Hemisphere}.refsulc."$HighResMesh"k_fs_LR.shape.gii --out="$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}. --verbose
 		cp ${MSMCONFIGDIR}/MSMSulcStrainFinalconf "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.logdir/conf
 		cd $DIR
-		#cp "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.HIGHRES_transformed.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.MSMSulc.native.surf.gii
-		cp "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere.reg.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.MSMSulc.native.surf.gii
+		#cp "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.HIGHRES_transformed.surf.gii ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.surf.gii
+		cp "$AtlasSpaceFolder"/"$NativeFolder"/MSMSulc/${Hemisphere}.sphere.reg.surf.gii ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.surf.gii
 		${CARET7DIR}/wb_command -set-structure "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.MSMSulc.native.surf.gii ${Structure}
 
 		#Make MSMSulc Registration Areal Distortion and Strain Maps
-		${CARET7DIR}/wb_command -surface-vertex-areas "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.shape.gii
-		${CARET7DIR}/wb_command -surface-vertex-areas "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.MSMSulc.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.MSMSulc.native.shape.gii
-		${CARET7DIR}/wb_command -metric-math "ln(spherereg / sphere) / ln(2)" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".ArealDistortion_MSMSulc.native.shape.gii -var sphere "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.shape.gii -var spherereg "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.MSMSulc.native.shape.gii
-		rm "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/${Subject}.${Hemisphere}.sphere.MSMSulc.native.shape.gii
-		${CARET7DIR}/wb_command -set-map-names "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".ArealDistortion_MSMSulc.native.shape.gii -map 1 "$Subject"_"$Hemisphere"_Areal_Distortion_MSMSulc
-		${CARET7DIR}/wb_command -metric-palette "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".ArealDistortion_MSMSulc.native.shape.gii MODE_AUTO_SCALE -palette-name ROY-BIG-BL -thresholding THRESHOLD_TYPE_NORMAL THRESHOLD_TEST_SHOW_OUTSIDE -1 1
+		${CARET7DIR}/wb_command -surface-vertex-areas ${AtlasNativeSubjHemi}.sphere.native.surf.gii ${AtlasNativeSubjHemi}.sphere.native.shape.gii
+		${CARET7DIR}/wb_command -surface-vertex-areas ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.surf.gii ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.shape.gii
+		${CARET7DIR}/wb_command -metric-math "ln(spherereg / sphere) / ln(2)" ${AtlasNativeSubjHemi}.ArealDistortion_MSMSulc.native.shape.gii -var sphere ${AtlasNativeSubjHemi}.sphere.native.shape.gii -var spherereg ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.shape.gii
+		rm ${AtlasNativeSubjHemi}.sphere.native.shape.gii ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.shape.gii
+		${CARET7DIR}/wb_command -set-map-names ${AtlasNativeSubjHemi}.ArealDistortion_MSMSulc.native.shape.gii -map 1 ${Subject}_${Hemisphere}_Areal_Distortion_MSMSulc
+		${CARET7DIR}/wb_command -metric-palette ${AtlasNativeSubjHemi}.ArealDistortion_MSMSulc.native.shape.gii MODE_AUTO_SCALE -palette-name ROY-BIG-BL -thresholding THRESHOLD_TYPE_NORMAL THRESHOLD_TEST_SHOW_OUTSIDE -1 1
 
-		${CARET7DIR}/wb_command -surface-distortion "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.MSMSulc.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".EdgeDistortion_MSMSulc.native.shape.gii -edge-method
+		${CARET7DIR}/wb_command -surface-distortion ${AtlasNativeSubjHemi}.sphere.native.surf.gii ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.surf.gii ${AtlasNativeSubjHemi}.EdgeDistortion_MSMSulc.native.shape.gii -edge-method
 
-		${CARET7DIR}/wb_command -surface-distortion "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sphere.MSMSulc.native.surf.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_MSMSulc.native.shape.gii -local-affine-method
-		${CARET7DIR}/wb_command -metric-merge "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainJ_MSMSulc.native.shape.gii -metric "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_MSMSulc.native.shape.gii -column 1
-		${CARET7DIR}/wb_command -metric-merge "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainR_MSMSulc.native.shape.gii -metric "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_MSMSulc.native.shape.gii -column 2
-		${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainJ_MSMSulc.native.shape.gii -var var "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainJ_MSMSulc.native.shape.gii
-		${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainR_MSMSulc.native.shape.gii -var var "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".StrainR_MSMSulc.native.shape.gii
-		rm "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".Strain_MSMSulc.native.shape.gii
+		${CARET7DIR}/wb_command -surface-distortion ${AtlasNativeSubjHemi}.sphere.native.surf.gii ${AtlasNativeSubjHemi}.sphere.MSMSulc.native.surf.gii ${AtlasNativeSubjHemi}.Strain_MSMSulc.native.shape.gii -local-affine-method
+		${CARET7DIR}/wb_command -metric-merge ${AtlasNativeSubjHemi}.StrainJ_MSMSulc.native.shape.gii -metric ${AtlasNativeSubjHemi}.Strain_MSMSulc.native.shape.gii -column 1
+		${CARET7DIR}/wb_command -metric-merge ${AtlasNativeSubjHemi}.StrainR_MSMSulc.native.shape.gii -metric ${AtlasNativeSubjHemi}.Strain_MSMSulc.native.shape.gii -column 2
+		${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" ${AtlasNativeSubjHemi}.StrainJ_MSMSulc.native.shape.gii -var var ${AtlasNativeSubjHemi}.StrainJ_MSMSulc.native.shape.gii
+		${CARET7DIR}/wb_command -metric-math "ln(var) / ln (2)" ${AtlasNativeSubjHemi}.StrainR_MSMSulc.native.shape.gii -var var ${AtlasNativeSubjHemi}.StrainR_MSMSulc.native.shape.gii
+		rm ${AtlasNativeSubjHemi}.Strain_MSMSulc.native.shape.gii
 
-		RegSphere="${AtlasSpaceFolder}/${NativeFolder}/${Subject}.${Hemisphere}.sphere.MSMSulc.native.surf.gii"
+		RegSphere=${AtlasNativeSubjHemi}.sphere.MSMSulc.native.surf.gii
 	else  # Not using MSMSulc
-		RegSphere="${AtlasSpaceFolder}/${NativeFolder}/${Subject}.${Hemisphere}.sphere.reg.reg_LR.native.surf.gii"
+		RegSphere=${AtlasNativeSubjHemi}.sphere.reg.reg_LR.native.surf.gii
 	fi	## if [ ${RegName} = "MSMSulc" ] ; then
 
 	#Ensure no zeros in atlas medial wall ROI
-	${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".atlasroi."$HighResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii ${RegSphere} BARYCENTRIC "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".atlasroi.native.shape.gii -largest
-	${CARET7DIR}/wb_command -metric-math "(atlas + individual) > 0" "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii -var atlas "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".atlasroi.native.shape.gii -var individual "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii
-	${CARET7DIR}/wb_command -metric-mask "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".thickness.native.shape.gii
-	${CARET7DIR}/wb_command -metric-mask "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".curvature.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".curvature.native.shape.gii
+	${CARET7DIR}/wb_command -metric-resample ${AtlasSubjHemi}.atlasroi."$HighResMesh"k_fs_LR.shape.gii ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii ${RegSphere} BARYCENTRIC ${AtlasNativeSubjHemi}.atlasroi.native.shape.gii -largest
+	${CARET7DIR}/wb_command -metric-math "(atlas + individual) > 0" ${AtlasNativeSubjHemi}.roi.native.shape.gii -var atlas ${AtlasNativeSubjHemi}.atlasroi.native.shape.gii -var individual ${AtlasNativeSubjHemi}.roi.native.shape.gii
+	${CARET7DIR}/wb_command -metric-mask ${AtlasNativeSubjHemi}.thickness.native.shape.gii ${AtlasNativeSubjHemi}.roi.native.shape.gii ${AtlasNativeSubjHemi}.thickness.native.shape.gii
+	${CARET7DIR}/wb_command -metric-mask ${AtlasNativeSubjHemi}.curvature.native.shape.gii ${AtlasNativeSubjHemi}.roi.native.shape.gii ${AtlasNativeSubjHemi}.curvature.native.shape.gii
 
 	#Populate Highres fs_LR spec file.  Deform surfaces and other data according to native to folding-based registration selected above.  Regenerate inflated surfaces.
 	for Surface in white midthickness pial ; do
-		${CARET7DIR}/wb_command -surface-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii ${RegSphere} "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii BARYCENTRIC "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Surface"."$HighResMesh"k_fs_LR.surf.gii
-		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Surface"."$HighResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -surface-resample ${AtlasNativeSubjHemi}."$Surface".native.surf.gii ${RegSphere} ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii BARYCENTRIC ${AtlasSubjHemi}."$Surface"."$HighResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure ${AtlasSubjHemi}."$Surface"."$HighResMesh"k_fs_LR.surf.gii
 	done
 	
 	#HCP fsaverage_LR32k used -iterations-scale 0.75. Compute new param value for high res mesh density
 	HighResInflationScale=$(echo "scale=4; $InflateExtraScale * 0.75 * $HighResMesh / 32" | bc -l)
 
-	${CARET7DIR}/wb_command -surface-generate-inflated "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".midthickness."$HighResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".inflated."$HighResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".very_inflated."$HighResMesh"k_fs_LR.surf.gii -iterations-scale $HighResInflationScale
-	${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".inflated."$HighResMesh"k_fs_LR.surf.gii
-	${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".very_inflated."$HighResMesh"k_fs_LR.surf.gii
+	${CARET7DIR}/wb_command -surface-generate-inflated ${AtlasSubjHemi}.midthickness."$HighResMesh"k_fs_LR.surf.gii ${AtlasSubjHemi}.inflated."$HighResMesh"k_fs_LR.surf.gii ${AtlasSubjHemi}.very_inflated."$HighResMesh"k_fs_LR.surf.gii -iterations-scale $HighResInflationScale
+	${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure ${AtlasSubjHemi}.inflated."$HighResMesh"k_fs_LR.surf.gii
+	${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/"$Subject"."$HighResMesh"k_fs_LR.wb.spec $Structure ${AtlasSubjHemi}.very_inflated."$HighResMesh"k_fs_LR.surf.gii
 
 	for Map in thickness curvature ; do
-		${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Map"."$HighResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".midthickness."$HighResMesh"k_fs_LR.surf.gii -current-roi "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii
-		${CARET7DIR}/wb_command -metric-mask "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Map"."$HighResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".atlasroi."$HighResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Map"."$HighResMesh"k_fs_LR.shape.gii
+		${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}."$Map".native.shape.gii ${RegSphere} ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasSubjHemi}."$Map"."$HighResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasSubjHemi}.midthickness."$HighResMesh"k_fs_LR.surf.gii -current-roi ${AtlasNativeSubjHemi}.roi.native.shape.gii
+		${CARET7DIR}/wb_command -metric-mask ${AtlasSubjHemi}."$Map"."$HighResMesh"k_fs_LR.shape.gii ${AtlasSubjHemi}.atlasroi."$HighResMesh"k_fs_LR.shape.gii ${AtlasSubjHemi}."$Map"."$HighResMesh"k_fs_LR.shape.gii
 	done
 
 	#MPH: Why can't the following resample of 'sulc' be part of the 'for' loop above (same as below where "sulc curvative thickness" are in a common 'for' loop)?
-	${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sulc.native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sulc."$HighResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".midthickness."$HighResMesh"k_fs_LR.surf.gii
+	${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}.sulc.native.shape.gii ${RegSphere} ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasSubjHemi}.sulc."$HighResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasSubjHemi}.midthickness."$HighResMesh"k_fs_LR.surf.gii
 
 	# Add distortion/strain maps
 	for Map in ArealDistortion EdgeDistortion StrainJ StrainR ; do
-		${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map"_FS.native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Map"_FS."$HighResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".midthickness."$HighResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}."$Map"_FS.native.shape.gii ${RegSphere} ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasSubjHemi}."$Map"_FS."$HighResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasSubjHemi}.midthickness."$HighResMesh"k_fs_LR.surf.gii
 		if [ ${RegName} = "MSMSulc" ] ; then
-			${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map"_MSMSulc.native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Map"_MSMSulc."$HighResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".midthickness."$HighResMesh"k_fs_LR.surf.gii
+			${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}."$Map"_MSMSulc.native.shape.gii ${RegSphere} ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasSubjHemi}."$Map"_MSMSulc."$HighResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasSubjHemi}.midthickness."$HighResMesh"k_fs_LR.surf.gii
 		fi
 	done
 
 	# FS anatomical labels
 	for Map in aparc aparc.a2009s ; do #Remove BA because it doesn't convert properly
 		if [ -e "$FreeSurferFolder"/label/"$hemisphere"h."$Map".annot ] ; then
-			${CARET7DIR}/wb_command -label-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.label.gii ${RegSphere} "$AtlasSpaceFolder"/"$Subject"."$Hemisphere".sphere."$HighResMesh"k_fs_LR.surf.gii BARYCENTRIC "$AtlasSpaceFolder"/"$Subject"."$Hemisphere"."$Map"."$HighResMesh"k_fs_LR.label.gii -largest
+			${CARET7DIR}/wb_command -label-resample ${AtlasNativeSubjHemi}."$Map".native.label.gii ${RegSphere} ${AtlasSubjHemi}.sphere."$HighResMesh"k_fs_LR.surf.gii BARYCENTRIC ${AtlasSubjHemi}."$Map"."$HighResMesh"k_fs_LR.label.gii -largest
 		fi
 	done
 	### ------ END section specific to HighResMesh ------
 
 	### ------ BEGIN section specific to LowResMeshes ------
 	for LowResMesh in ${LowResMeshes} ; do
+
+		# Set up some variables for common strings
+		AtlasFSLRSubj="$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"
+		AtlasFSLRSubjHemi="$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"
+		T1wFSLRSubj="$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"
+		T1wFSLRSubjHemi="$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"
+		
 		#Copy Atlas Files
-		cp "$SurfaceAtlasDIR"/"$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii
-		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii
-		cp "$GrayordinatesSpaceDIR"/"$Hemisphere".atlasroi."$LowResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".atlasroi."$LowResMesh"k_fs_LR.shape.gii
+		cp "$SurfaceAtlasDIR"/"$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -add-to-spec-file ${AtlasFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii
+		cp "$GrayordinatesSpaceDIR"/"$Hemisphere".atlasroi."$LowResMesh"k_fs_LR.shape.gii ${AtlasFSLRSubjHemi}.atlasroi."$LowResMesh"k_fs_LR.shape.gii
 		if [ -e "$SurfaceAtlasDIR"/colin.cerebral."$Hemisphere".flat."$LowResMesh"k_fs_LR.surf.gii ] ; then
-			cp "$SurfaceAtlasDIR"/colin.cerebral."$Hemisphere".flat."$LowResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".flat."$LowResMesh"k_fs_LR.surf.gii
-			${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".flat."$LowResMesh"k_fs_LR.surf.gii
+			cp "$SurfaceAtlasDIR"/colin.cerebral."$Hemisphere".flat."$LowResMesh"k_fs_LR.surf.gii ${AtlasFSLRSubjHemi}.flat."$LowResMesh"k_fs_LR.surf.gii
+			${CARET7DIR}/wb_command -add-to-spec-file ${AtlasFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${AtlasFSLRSubjHemi}.flat."$LowResMesh"k_fs_LR.surf.gii
 		fi
 
 		#Create downsampled fs_LR spec files.
 		for Surface in white midthickness pial ; do
-			${CARET7DIR}/wb_command -surface-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii ${RegSphere} "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii BARYCENTRIC "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Surface"."$LowResMesh"k_fs_LR.surf.gii
-			${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Surface"."$LowResMesh"k_fs_LR.surf.gii
+			${CARET7DIR}/wb_command -surface-resample ${AtlasNativeSubjHemi}."$Surface".native.surf.gii ${RegSphere} ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii BARYCENTRIC ${AtlasFSLRSubjHemi}."$Surface"."$LowResMesh"k_fs_LR.surf.gii
+			${CARET7DIR}/wb_command -add-to-spec-file ${AtlasFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${AtlasFSLRSubjHemi}."$Surface"."$LowResMesh"k_fs_LR.surf.gii
 		done
 
 		#HCP fsaverage_LR32k used -iterations-scale 0.75. Recalculate in case using a different mesh
 		LowResInflationScale=$(echo "scale=4; $InflateExtraScale * 0.75 * $LowResMesh / 32" | bc -l)
 
-		${CARET7DIR}/wb_command -surface-generate-inflated "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".midthickness."$LowResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".inflated."$LowResMesh"k_fs_LR.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".very_inflated."$LowResMesh"k_fs_LR.surf.gii -iterations-scale "$LowResInflationScale"
-		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".inflated."$LowResMesh"k_fs_LR.surf.gii
-		${CARET7DIR}/wb_command -add-to-spec-file "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".very_inflated."$LowResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -surface-generate-inflated ${AtlasFSLRSubjHemi}.midthickness."$LowResMesh"k_fs_LR.surf.gii ${AtlasFSLRSubjHemi}.inflated."$LowResMesh"k_fs_LR.surf.gii ${AtlasFSLRSubjHemi}.very_inflated."$LowResMesh"k_fs_LR.surf.gii -iterations-scale "$LowResInflationScale"
+		${CARET7DIR}/wb_command -add-to-spec-file ${AtlasFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${AtlasFSLRSubjHemi}.inflated."$LowResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -add-to-spec-file ${AtlasFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${AtlasFSLRSubjHemi}.very_inflated."$LowResMesh"k_fs_LR.surf.gii
 
 		for Map in sulc thickness curvature ; do
-			${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Map"."$LowResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".midthickness."$LowResMesh"k_fs_LR.surf.gii -current-roi "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".roi.native.shape.gii
-			${CARET7DIR}/wb_command -metric-mask "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Map"."$LowResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".atlasroi."$LowResMesh"k_fs_LR.shape.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Map"."$LowResMesh"k_fs_LR.shape.gii
+			${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}."$Map".native.shape.gii ${RegSphere} ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasFSLRSubjHemi}."$Map"."$LowResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasFSLRSubjHemi}.midthickness."$LowResMesh"k_fs_LR.surf.gii -current-roi ${AtlasNativeSubjHemi}.roi.native.shape.gii
+			${CARET7DIR}/wb_command -metric-mask ${AtlasFSLRSubjHemi}."$Map"."$LowResMesh"k_fs_LR.shape.gii ${AtlasFSLRSubjHemi}.atlasroi."$LowResMesh"k_fs_LR.shape.gii ${AtlasFSLRSubjHemi}."$Map"."$LowResMesh"k_fs_LR.shape.gii
 		done
 
 		#MPH: Why is this following resample here, when already part of the preceding 'for' loop?  (Should it not be in the above loop?)
-		${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".sulc.native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sulc."$LowResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".midthickness."$LowResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}.sulc.native.shape.gii ${RegSphere} ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasFSLRSubjHemi}.sulc."$LowResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasFSLRSubjHemi}.midthickness."$LowResMesh"k_fs_LR.surf.gii
 
 		# Add distortion/strain maps
 		for Map in ArealDistortion EdgeDistortion StrainJ StrainR ; do
-			${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map"_FS.native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Map"_FS."$LowResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".midthickness."$LowResMesh"k_fs_LR.surf.gii
+			${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}."$Map"_FS.native.shape.gii ${RegSphere} ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasFSLRSubjHemi}."$Map"_FS."$LowResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasFSLRSubjHemi}.midthickness."$LowResMesh"k_fs_LR.surf.gii
 			if [ ${RegName} = "MSMSulc" ] ; then
-				${CARET7DIR}/wb_command -metric-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map"_MSMSulc.native.shape.gii ${RegSphere} "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Map"_MSMSulc."$LowResMesh"k_fs_LR.shape.gii -area-surfs "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere".midthickness.native.surf.gii "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".midthickness."$LowResMesh"k_fs_LR.surf.gii
+				${CARET7DIR}/wb_command -metric-resample ${AtlasNativeSubjHemi}."$Map"_MSMSulc.native.shape.gii ${RegSphere} ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii ADAP_BARY_AREA ${AtlasFSLRSubjHemi}."$Map"_MSMSulc."$LowResMesh"k_fs_LR.shape.gii -area-surfs ${T1wNativeSubjHemi}.midthickness.native.surf.gii ${AtlasFSLRSubjHemi}.midthickness."$LowResMesh"k_fs_LR.surf.gii
 			fi
 		done
 	
 		# FS anatomical labels
 		for Map in aparc aparc.a2009s ; do #Remove BA because it doesn't convert properly
 			if [ -e "$FreeSurferFolder"/label/"$hemisphere"h."$Map".annot ] ; then
-				${CARET7DIR}/wb_command -label-resample "$AtlasSpaceFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Map".native.label.gii ${RegSphere} "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii BARYCENTRIC "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Map"."$LowResMesh"k_fs_LR.label.gii -largest
+				${CARET7DIR}/wb_command -label-resample ${AtlasNativeSubjHemi}."$Map".native.label.gii ${RegSphere} ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii BARYCENTRIC ${AtlasFSLRSubjHemi}."$Map"."$LowResMesh"k_fs_LR.label.gii -largest
 			fi
 		done
 
 		#Create downsampled fs_LR spec file in structural space.
 		for Surface in white midthickness pial ; do
-			${CARET7DIR}/wb_command -surface-resample "$T1wFolder"/"$NativeFolder"/"$Subject"."$Hemisphere"."$Surface".native.surf.gii ${RegSphere} "$AtlasSpaceFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".sphere."$LowResMesh"k_fs_LR.surf.gii BARYCENTRIC "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Surface"."$LowResMesh"k_fs_LR.surf.gii
-			${CARET7DIR}/wb_command -add-to-spec-file "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere"."$Surface"."$LowResMesh"k_fs_LR.surf.gii
+			${CARET7DIR}/wb_command -surface-resample ${T1wNativeSubjHemi}."$Surface".native.surf.gii ${RegSphere} ${AtlasFSLRSubjHemi}.sphere."$LowResMesh"k_fs_LR.surf.gii BARYCENTRIC ${T1wFSLRSubjHemi}."$Surface"."$LowResMesh"k_fs_LR.surf.gii
+			${CARET7DIR}/wb_command -add-to-spec-file ${T1wFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${T1wFSLRSubjHemi}."$Surface"."$LowResMesh"k_fs_LR.surf.gii
 		done
 
 		#HCP fsaverage_LR32k used -iterations-scale 0.75. Recalculate in case using a different mesh
 		LowResInflationScale=$(echo "scale=4; $InflateExtraScale * 0.75 * $LowResMesh / 32" | bc -l)
 
-		${CARET7DIR}/wb_command -surface-generate-inflated "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".midthickness."$LowResMesh"k_fs_LR.surf.gii "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".inflated."$LowResMesh"k_fs_LR.surf.gii "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".very_inflated."$LowResMesh"k_fs_LR.surf.gii -iterations-scale "$LowResInflationScale"
-		${CARET7DIR}/wb_command -add-to-spec-file "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".inflated."$LowResMesh"k_fs_LR.surf.gii
-		${CARET7DIR}/wb_command -add-to-spec-file "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$LowResMesh"k_fs_LR.wb.spec $Structure "$T1wFolder"/fsaverage_LR"$LowResMesh"k/"$Subject"."$Hemisphere".very_inflated."$LowResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -surface-generate-inflated ${T1wFSLRSubjHemi}.midthickness."$LowResMesh"k_fs_LR.surf.gii ${T1wFSLRSubjHemi}.inflated."$LowResMesh"k_fs_LR.surf.gii ${T1wFSLRSubjHemi}.very_inflated."$LowResMesh"k_fs_LR.surf.gii -iterations-scale "$LowResInflationScale"
+		${CARET7DIR}/wb_command -add-to-spec-file ${T1wFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${T1wFSLRSubjHemi}.inflated."$LowResMesh"k_fs_LR.surf.gii
+		${CARET7DIR}/wb_command -add-to-spec-file ${T1wFSLRSubj}."$LowResMesh"k_fs_LR.wb.spec $Structure ${T1wFSLRSubjHemi}.very_inflated."$LowResMesh"k_fs_LR.surf.gii
 		### ------ END section specific to LowResMeshes ------
 		
 	done ## for LowResMesh in ${LowResMeshes} ; do
@@ -490,34 +508,36 @@ for STRING in "$AtlasSpaceFolder"/"$NativeFolder"@native@roi "$AtlasSpaceFolder"
 	Mesh=$(echo $STRING | cut -d "@" -f 2)
 	ROI=$(echo $STRING | cut -d "@" -f 3)
 
-	${CARET7DIR}/wb_command -cifti-create-dense-scalar "$Folder"/"$Subject".sulc."$Mesh".dscalar.nii -left-metric "$Folder"/"$Subject".L.sulc."$Mesh".shape.gii -right-metric "$Folder"/"$Subject".R.sulc."$Mesh".shape.gii
-	${CARET7DIR}/wb_command -set-map-names "$Folder"/"$Subject".sulc."$Mesh".dscalar.nii -map 1 "${Subject}_Sulc"
-	${CARET7DIR}/wb_command -cifti-palette "$Folder"/"$Subject".sulc."$Mesh".dscalar.nii MODE_AUTO_SCALE_PERCENTAGE "$Folder"/"$Subject".sulc."$Mesh".dscalar.nii -pos-percent 2 98 -palette-name Gray_Interp -disp-pos true -disp-neg true -disp-zero true
+	FolderSubj="$Folder"/"$Subject"
+	
+	${CARET7DIR}/wb_command -cifti-create-dense-scalar ${FolderSubj}.sulc."$Mesh".dscalar.nii -left-metric ${FolderSubj}.L.sulc."$Mesh".shape.gii -right-metric ${FolderSubj}.R.sulc."$Mesh".shape.gii
+	${CARET7DIR}/wb_command -set-map-names ${FolderSubj}.sulc."$Mesh".dscalar.nii -map 1 "${Subject}_Sulc"
+	${CARET7DIR}/wb_command -cifti-palette ${FolderSubj}.sulc."$Mesh".dscalar.nii MODE_AUTO_SCALE_PERCENTAGE ${FolderSubj}.sulc."$Mesh".dscalar.nii -pos-percent 2 98 -palette-name Gray_Interp -disp-pos true -disp-neg true -disp-zero true
 
-	${CARET7DIR}/wb_command -cifti-create-dense-scalar "$Folder"/"$Subject".curvature."$Mesh".dscalar.nii -left-metric "$Folder"/"$Subject".L.curvature."$Mesh".shape.gii -roi-left "$Folder"/"$Subject".L."$ROI"."$Mesh".shape.gii -right-metric "$Folder"/"$Subject".R.curvature."$Mesh".shape.gii -roi-right "$Folder"/"$Subject".R."$ROI"."$Mesh".shape.gii
-	${CARET7DIR}/wb_command -set-map-names "$Folder"/"$Subject".curvature."$Mesh".dscalar.nii -map 1 "${Subject}_Curvature"
-	${CARET7DIR}/wb_command -cifti-palette "$Folder"/"$Subject".curvature."$Mesh".dscalar.nii MODE_AUTO_SCALE_PERCENTAGE "$Folder"/"$Subject".curvature."$Mesh".dscalar.nii -pos-percent 2 98 -palette-name Gray_Interp -disp-pos true -disp-neg true -disp-zero true
+	${CARET7DIR}/wb_command -cifti-create-dense-scalar ${FolderSubj}.curvature."$Mesh".dscalar.nii -left-metric ${FolderSubj}.L.curvature."$Mesh".shape.gii -roi-left ${FolderSubj}.L."$ROI"."$Mesh".shape.gii -right-metric ${FolderSubj}.R.curvature."$Mesh".shape.gii -roi-right ${FolderSubj}.R."$ROI"."$Mesh".shape.gii
+	${CARET7DIR}/wb_command -set-map-names ${FolderSubj}.curvature."$Mesh".dscalar.nii -map 1 "${Subject}_Curvature"
+	${CARET7DIR}/wb_command -cifti-palette ${FolderSubj}.curvature."$Mesh".dscalar.nii MODE_AUTO_SCALE_PERCENTAGE ${FolderSubj}.curvature."$Mesh".dscalar.nii -pos-percent 2 98 -palette-name Gray_Interp -disp-pos true -disp-neg true -disp-zero true
 
-	${CARET7DIR}/wb_command -cifti-create-dense-scalar "$Folder"/"$Subject".thickness."$Mesh".dscalar.nii -left-metric "$Folder"/"$Subject".L.thickness."$Mesh".shape.gii -roi-left "$Folder"/"$Subject".L."$ROI"."$Mesh".shape.gii -right-metric "$Folder"/"$Subject".R.thickness."$Mesh".shape.gii -roi-right "$Folder"/"$Subject".R."$ROI"."$Mesh".shape.gii
-	${CARET7DIR}/wb_command -set-map-names "$Folder"/"$Subject".thickness."$Mesh".dscalar.nii -map 1 "${Subject}_Thickness"
-	${CARET7DIR}/wb_command -cifti-palette "$Folder"/"$Subject".thickness."$Mesh".dscalar.nii MODE_AUTO_SCALE_PERCENTAGE "$Folder"/"$Subject".thickness."$Mesh".dscalar.nii -pos-percent 4 96 -interpolate true -palette-name videen_style -disp-pos true -disp-neg false -disp-zero false
+	${CARET7DIR}/wb_command -cifti-create-dense-scalar ${FolderSubj}.thickness."$Mesh".dscalar.nii -left-metric ${FolderSubj}.L.thickness."$Mesh".shape.gii -roi-left ${FolderSubj}.L."$ROI"."$Mesh".shape.gii -right-metric ${FolderSubj}.R.thickness."$Mesh".shape.gii -roi-right ${FolderSubj}.R."$ROI"."$Mesh".shape.gii
+	${CARET7DIR}/wb_command -set-map-names ${FolderSubj}.thickness."$Mesh".dscalar.nii -map 1 "${Subject}_Thickness"
+	${CARET7DIR}/wb_command -cifti-palette ${FolderSubj}.thickness."$Mesh".dscalar.nii MODE_AUTO_SCALE_PERCENTAGE ${FolderSubj}.thickness."$Mesh".dscalar.nii -pos-percent 4 96 -interpolate true -palette-name videen_style -disp-pos true -disp-neg false -disp-zero false
 
 	for Map in ArealDistortion EdgeDistortion StrainJ StrainR ; do
-		${CARET7DIR}/wb_command -cifti-create-dense-scalar "$Folder"/"$Subject"."$Map"_FS."$Mesh".dscalar.nii -left-metric "$Folder"/"$Subject".L."$Map"_FS."$Mesh".shape.gii -right-metric "$Folder"/"$Subject".R."$Map"_FS."$Mesh".shape.gii
-		${CARET7DIR}/wb_command -set-map-names "$Folder"/"$Subject"."$Map"_FS."$Mesh".dscalar.nii -map 1 "${Subject}_${Map}_FS"
-		${CARET7DIR}/wb_command -cifti-palette "$Folder"/"$Subject"."$Map"_FS."$Mesh".dscalar.nii MODE_USER_SCALE "$Folder"/"$Subject"."$Map"_FS."$Mesh".dscalar.nii -pos-user 0 1 -neg-user 0 -1 -interpolate true -palette-name ROY-BIG-BL -disp-pos true -disp-neg true -disp-zero false
+		${CARET7DIR}/wb_command -cifti-create-dense-scalar ${FolderSubj}."$Map"_FS."$Mesh".dscalar.nii -left-metric ${FolderSubj}.L."$Map"_FS."$Mesh".shape.gii -right-metric ${FolderSubj}.R."$Map"_FS."$Mesh".shape.gii
+		${CARET7DIR}/wb_command -set-map-names ${FolderSubj}."$Map"_FS."$Mesh".dscalar.nii -map 1 "${Subject}_${Map}_FS"
+		${CARET7DIR}/wb_command -cifti-palette ${FolderSubj}."$Map"_FS."$Mesh".dscalar.nii MODE_USER_SCALE ${FolderSubj}."$Map"_FS."$Mesh".dscalar.nii -pos-user 0 1 -neg-user 0 -1 -interpolate true -palette-name ROY-BIG-BL -disp-pos true -disp-neg true -disp-zero false
 
 		if [ ${RegName} = "MSMSulc" ] ; then
-			${CARET7DIR}/wb_command -cifti-create-dense-scalar "$Folder"/"$Subject"."$Map"_MSMSulc."$Mesh".dscalar.nii -left-metric "$Folder"/"$Subject".L."$Map"_MSMSulc."$Mesh".shape.gii -right-metric "$Folder"/"$Subject".R.ArealDistortion_MSMSulc."$Mesh".shape.gii
-			${CARET7DIR}/wb_command -set-map-names "$Folder"/"$Subject"."$Map"_MSMSulc."$Mesh".dscalar.nii -map 1 "${Subject}_${Map}_MSMSulc"
-			${CARET7DIR}/wb_command -cifti-palette "$Folder"/"$Subject"."$Map"_MSMSulc."$Mesh".dscalar.nii MODE_USER_SCALE "$Folder"/"$Subject"."$Map"_MSMSulc."$Mesh".dscalar.nii -pos-user 0 1 -neg-user 0 -1 -interpolate true -palette-name ROY-BIG-BL -disp-pos true -disp-neg true -disp-zero false
+			${CARET7DIR}/wb_command -cifti-create-dense-scalar ${FolderSubj}."$Map"_MSMSulc."$Mesh".dscalar.nii -left-metric ${FolderSubj}.L."$Map"_MSMSulc."$Mesh".shape.gii -right-metric ${FolderSubj}.R.ArealDistortion_MSMSulc."$Mesh".shape.gii
+			${CARET7DIR}/wb_command -set-map-names ${FolderSubj}."$Map"_MSMSulc."$Mesh".dscalar.nii -map 1 "${Subject}_${Map}_MSMSulc"
+			${CARET7DIR}/wb_command -cifti-palette ${FolderSubj}."$Map"_MSMSulc."$Mesh".dscalar.nii MODE_USER_SCALE ${FolderSubj}."$Map"_MSMSulc."$Mesh".dscalar.nii -pos-user 0 1 -neg-user 0 -1 -interpolate true -palette-name ROY-BIG-BL -disp-pos true -disp-neg true -disp-zero false
 		fi
 	done
 
 	for Map in aparc aparc.a2009s ; do #Remove BA because it doesn't convert properly
-		if [ -e "$Folder"/"$Subject".L.${Map}."$Mesh".label.gii ] ; then
-			${CARET7DIR}/wb_command -cifti-create-label "$Folder"/"$Subject".${Map}."$Mesh".dlabel.nii -left-label "$Folder"/"$Subject".L.${Map}."$Mesh".label.gii -roi-left "$Folder"/"$Subject".L."$ROI"."$Mesh".shape.gii -right-label "$Folder"/"$Subject".R.${Map}."$Mesh".label.gii -roi-right "$Folder"/"$Subject".R."$ROI"."$Mesh".shape.gii
-			${CARET7DIR}/wb_command -set-map-names "$Folder"/"$Subject".${Map}."$Mesh".dlabel.nii -map 1 "$Subject"_${Map}
+		if [ -e ${FolderSubj}.L.${Map}."$Mesh".label.gii ] ; then
+			${CARET7DIR}/wb_command -cifti-create-label ${FolderSubj}.${Map}."$Mesh".dlabel.nii -left-label ${FolderSubj}.L.${Map}."$Mesh".label.gii -roi-left ${FolderSubj}.L."$ROI"."$Mesh".shape.gii -right-label ${FolderSubj}.R.${Map}."$Mesh".label.gii -roi-right ${FolderSubj}.R."$ROI"."$Mesh".shape.gii
+			${CARET7DIR}/wb_command -set-map-names ${FolderSubj}.${Map}."$Mesh".dlabel.nii -map 1 "$Subject"_${Map}
 		fi
 	done
 done
